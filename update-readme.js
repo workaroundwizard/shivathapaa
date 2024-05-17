@@ -1,5 +1,5 @@
 const axios = require('axios');
-const fs = require('fs').promises; // Use promises for better async handling
+const fs = require('fs').promises;
 
 const mediumUsername = 'shivathapaa';
 const devtoUsername = 'shivathapaa';
@@ -79,8 +79,7 @@ ${devtoPosts.map(post => `- [${post.title}](${post.link})`).join('\n')}
         readmeContent = await fs.readFile('README.md', 'utf8');
       } catch (fileError) {
         console.error('Error reading README file:', fileError);
-        console.log('::set-output name=changed::false');
-        return;
+        process.exit(1);
       }
 
       const updatedReadme = readmeContent.replace(/<!-- BLOG-POST-LIST:START -->[\s\S]*<!-- BLOG-POST-LIST:END -->/, content.trim());
@@ -90,17 +89,16 @@ ${devtoPosts.map(post => `- [${post.title}](${post.link})`).join('\n')}
         await writePosts({ medium: mediumPosts, devto: devtoPosts });
       } catch (fileError) {
         console.error('Error writing to README or posts.json:', fileError);
-        console.log('::set-output name=changed::false');
-        return;
+        process.exit(1);
       }
 
-      console.log('::set-output name=changed::true');
+      console.log('changed=true');
     } else {
-      console.log('::set-output name=changed::false');
+      console.log('changed=false');
     }
   } catch (error) {
     console.error('Error updating README:', error);
-    console.log('::set-output name=changed::false');
+    process.exit(1);
   }
 }
 
