@@ -1,105 +1,48 @@
-const axios = require('axios');
-const fs = require('fs').promises;
+name: Update README with latest blog posts
 
-const mediumUsername = 'YOUR_MEDIUM_USERNAME';
-const devtoUsername = 'YOUR_DEVTO_USERNAME';
+on:
+  schedule:
+    - cron: '0 0 */9 * *'  # Runs every 9 days at midnight
+  push:
+    branches:
+      - main
 
-async function fetchMediumPosts() {
-  try {
-    const response = await axios.get(`https://api.rss2json.com/v1/api.json?rss_url=https://medium.com/feed/@${mediumUsername}`);
-    return response.data.items.slice(0, 2).map(post => ({
-      title: post.title,
-      link: post.link
-    }));
-  } catch (error) {
-    console.error('Error fetching Medium posts:', error);
-    return [];
-  }
-}
+jobs:
+  update-readme:
+    runs-on: ubuntu-latest
 
-async function fetchDevtoPosts() {
-  try {
-    const response = await axios.get(`https://dev.to/api/articles?username=${devtoUsername}`);
-    return response.data.slice(0, 2).map(post => ({
-      title: post.title,
-      link: post.url
-    }));
-  } catch (error) {
-    console.error('Error fetching Dev.to posts:', error);
-    return [];
-  }
-}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3  # Ensure the latest version is used
 
-async function readPreviousPosts() {
-  try {
-    const data = await fs.readFile('posts.json', 'utf8');
-    return JSON.parse(data);
-  } catch (error) {
-    if (error.code === 'ENOENT') {
-      // File does not exist, return empty structure
-      return { medium: [], devto: [] };
-    } else {
-      console.error('Error reading previous posts:', error);
-      throw error;
-    }
-  }
-}
+      - name: Setup Node.js
+        uses: actions/setup-node@v3  # Ensure the latest version is used
+        with:
+          node-version: '20'
 
-async function writePosts(posts) {
-  try {
-    await fs.writeFile('posts.json', JSON.stringify(posts, null, 2));
-  } catch (error) {
-    console.error('Error writing posts to file:', error);
-    throw error;
-  }
-}
+      - name: Install dependencies
+        run: npm install axios
 
-async function updateReadme() {
-  try {
-    const [mediumPosts, devtoPosts] = await Promise.all([fetchMediumPosts(), fetchDevtoPosts()]);
-    const previousPosts = await readPreviousPosts();
+      - name: Run script to update README
+        id: update-readme
+        run: node update-readme.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    const hasChanges =
-      JSON.stringify(mediumPosts) !== JSON.stringify(previousPosts.medium) ||
-      JSON.stringify(devtoPosts) !== JSON.stringify(previousPosts.devto);
+      - name: Check for changes
+        id: check_changes
+        run: |
+          if git diff --quiet; then
+            echo "changed=false" >> $GITHUB_ENV
+          else
+            echo "changed=true" >> $GITHUB_ENV
+          fi
 
-    if (hasChanges) {
-      const content = `
-<!-- BLOG-POST-LIST:START -->
-### Medium
-${mediumPosts.map(post => `- [${post.title}](${post.link})`).join('\n')}
-
-### Dev.to
-${devtoPosts.map(post => `- [${post.title}](${post.link})`).join('\n')}
-<!-- BLOG-POST-LIST:END -->
-`;
-
-      let readmeContent;
-      try {
-        readmeContent = await fs.readFile('README.md', 'utf8');
-      } catch (fileError) {
-        console.error('Error reading README file:', fileError);
-        process.exit(1);
-      }
-
-      const updatedReadme = readmeContent.replace(/<!-- BLOG-POST-LIST:START -->[\s\S]*<!-- BLOG-POST-LIST:END -->/, content.trim());
-
-      try {
-        await fs.writeFile('README.md', updatedReadme);
-        await writePosts({ medium: mediumPosts, devto: devtoPosts });
-      } catch (fileError) {
-        console.error('Error writing to README or posts.json:', fileError);
-        process.exit(1);
-      }
-
-      console.log('changed=true');
-    } else {
-      console.log('changed=false');
-    }
-  } catch (error) {
-    console.error('Error updating README:', error);
-    process.exit(1);
-  }
-}
-
-updateReadme();
+      - name: Commit changes
+        if: env.changed == 'true'
+        run: |
+          git add README.md posts.json
+          git commit -m 'Update README with latest blog posts'
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
