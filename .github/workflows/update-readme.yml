@@ -13,36 +13,39 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Setup Node.js
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@v3
         with:
-          node-version: '14'
+          node-version: '20'
 
       - name: Install dependencies
         run: npm install axios
-        continue-on-error: true  # Continue the workflow even if npm install fails
 
       - name: Run script to update README
         id: update-readme
         run: node update-readme.js
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        continue-on-error: true  # Continue the workflow even if the script fails
+
+      - name: Log Git status
+        run: git status
 
       - name: Check for changes
         id: check_changes
         run: |
           if git diff --quiet; then
-            echo "::set-output name=changed::false"
+            echo "changed=false" >> $GITHUB_ENV
           else
-            echo "::set-output name=changed::true"
+            echo "changed=true" >> $GITHUB_ENV
           fi
 
       - name: Commit changes
-        if: steps.check_changes.outputs.changed == 'true'
+        if: env.changed == 'true'
         run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
           git add README.md posts.json
           git commit -m 'Update README with latest blog posts'
           git push
